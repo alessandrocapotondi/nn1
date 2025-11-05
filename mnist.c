@@ -163,45 +163,96 @@ int main(int argc, char* argv[])
         fclose(fp);
     }
 
-    fprintf(stderr, "training...\n");
+    IdxFile* images_test = NULL;
+    {
+        FILE* fp = fopen(argv[3], "rb");
+        if (fp == NULL) return 111;
+        images_test = IdxFile_read(fp);
+        if (images_test == NULL) return 111;
+        fclose(fp);
+    }
+
+    IdxFile* labels_test = NULL;
+    {
+        FILE* fp = fopen(argv[4], "rb");
+        if (fp == NULL) return 111;
+        labels_test = IdxFile_read(fp);
+        if (labels_test == NULL) return 111;
+        fclose(fp);
+    }
+
     double rate = 0.1;
     double etotal = 0;
-    int nepoch = 10;
+    int nepoch = 1;
     int batch_size = 32;
     int train_size = images_train->dims[0];
-    for (int i = 0; i < nepoch * train_size; i++) {
-        /* Pick a random sample from the training data */
-        uint8_t img[28*28];
-        double x[28*28];
-        double y[10];
-        int index = rand() % train_size;
-        IdxFile_get3(images_train, index, img);
-        for (int j = 0; j < 28*28; j++) {
-            x[j] = img[j]/255.0;
+    for (int epoch = 0; epoch < nepoch; epoch++) {
+        for (int i = 0; i < train_size; i++) {
+            /* Pick a random sample from the training data */
+            uint8_t img[28*28];
+            double x[28*28];
+            double y[10];
+            int index = rand() % train_size;
+            IdxFile_get3(images_train, index, img);
+            for (int j = 0; j < 28*28; j++) {
+                x[j] = img[j]/255.0;
+            }
+            Layer_setInputs(linput, x);
+            Layer_getOutputs(loutput, y);
+            int label = IdxFile_get1(labels_train, index);
+    #if 0
+            fprintf(stderr, "label=%u, y=[", label);
+            for (int j = 0; j < 10; j++) {
+                fprintf(stderr, " %.3f", y[j]);
+            }
+            fprintf(stderr, "]\n");
+    #endif
+            for (int j = 0; j < 10; j++) {
+                y[j] = (j == label)? 1 : 0;
+            }
+            Layer_learnOutputs(loutput, y);
+            etotal += Layer_getErrorTotal(loutput);
+            if ((i % batch_size) == 0) {
+                /* Minibatch: update the network for every n samples. */
+                Layer_update(loutput, rate/batch_size);
+            }
+            if ((i % 1000) == 0) {
+                fprintf(stderr, "[Train] Epoch = %d, i=%d/%d, error=%.4f\n", epoch, i, train_size, etotal/1000);
+                etotal = 0;
+            }
         }
-        Layer_setInputs(linput, x);
-        Layer_getOutputs(loutput, y);
-        int label = IdxFile_get1(labels_train, index);
-#if 0
-        fprintf(stderr, "label=%u, y=[", label);
-        for (int j = 0; j < 10; j++) {
-            fprintf(stderr, " %.3f", y[j]);
+
+        int ntests = images_test->dims[0];
+        int ncorrect = 0;
+        for (int i = 0; i < ntests; i++) {
+            uint8_t img[28*28];
+            double x[28*28];
+            double y[10];
+            IdxFile_get3(images_test, i, img);
+            
+            for (int j = 0; j < 28*28; j++) {
+                x[j] = img[j]/255.0;
+            }
+            Layer_setInputs(linput, x);
+            Layer_getOutputs(loutput, y);
+
+            int label = IdxFile_get1(labels_test, i);
+            /* Pick the most probable label. */
+            int mj = -1;
+            for (int j = 0; j < 10; j++) {
+                if (mj < 0 || y[mj] < y[j]) {
+                    mj = j;
+                }
+            }
+            if (mj == label) {
+                ncorrect++;
+            }
+
+            if ((i % 1000) == 0) {
+                fprintf(stderr, "[Test] i=%d/%d\n", i);
+            }
         }
-        fprintf(stderr, "]\n");
-#endif
-        for (int j = 0; j < 10; j++) {
-            y[j] = (j == label)? 1 : 0;
-        }
-        Layer_learnOutputs(loutput, y);
-        etotal += Layer_getErrorTotal(loutput);
-        if ((i % batch_size) == 0) {
-            /* Minibatch: update the network for every n samples. */
-            Layer_update(loutput, rate/batch_size);
-        }
-        if ((i % 1000) == 0) {
-            fprintf(stderr, "i=%d, error=%.4f\n", i, etotal/1000);
-            etotal = 0;
-        }
+        fprintf(stderr, "[Test] Accuracy=%.4f\n", ncorrect/ntests);
     }
 
     IdxFile_destroy(images_train);
@@ -215,55 +266,6 @@ int main(int argc, char* argv[])
     //Layer_dump(lfull1, stdout);
     //Layer_dump(lfull2, stdout);
     //Layer_dump(loutput, stdout);
-
-    /* Read the test images & labels. */
-    
-    IdxFile* images_test = NULL;
-    {
-        FILE* fp = fopen(argv[3], "rb");
-        if (fp == NULL) return 111;
-        images_test = IdxFile_read(fp);
-        if (images_test == NULL) return 111;
-        fclose(fp);
-    }
-    IdxFile* labels_test = NULL;
-    {
-        FILE* fp = fopen(argv[4], "rb");
-        if (fp == NULL) return 111;
-        labels_test = IdxFile_read(fp);
-        if (labels_test == NULL) return 111;
-        fclose(fp);
-    }
-
-    fprintf(stderr, "testing...\n");
-    int ntests = images_test->dims[0];
-    int ncorrect = 0;
-    for (int i = 0; i < ntests; i++) {
-        uint8_t img[28*28];
-        double x[28*28];
-        double y[10];
-        IdxFile_get3(images_test, i, img);
-        for (int j = 0; j < 28*28; j++) {
-            x[j] = img[j]/255.0;
-        }
-        Layer_setInputs(linput, x);
-        Layer_getOutputs(loutput, y);
-        int label = IdxFile_get1(labels_test, i);
-        /* Pick the most probable label. */
-        int mj = -1;
-        for (int j = 0; j < 10; j++) {
-            if (mj < 0 || y[mj] < y[j]) {
-                mj = j;
-            }
-        }
-        if (mj == label) {
-            ncorrect++;
-        }
-        if ((i % 1000) == 0) {
-            fprintf(stderr, "i=%d\n", i);
-        }
-    }
-    fprintf(stderr, "ntests=%d, ncorrect=%d\n", ntests, ncorrect);
 
     IdxFile_destroy(images_test);
     IdxFile_destroy(labels_test);

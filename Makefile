@@ -1,7 +1,7 @@
 # Makefile
 
 RM=rm -f
-CC=cc -O -Wall -Werror
+CC=gcc -O2 -Wall
 CURL=curl
 GZIP=gzip
 
@@ -14,22 +14,22 @@ MNIST_FILES= \
 	$(DATADIR)/t10k-images-idx3-ubyte \
 	$(DATADIR)/t10k-labels-idx1-ubyte
 
-all: test_rnn
+all: test_bnn
 
 clean:
 	-$(RM) ./bnn ./mnist ./rnn *.o
 
 get_mnist:
 	-mkdir ./data
-	-$(CURL) http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz | \
+	-$(CURL) https://raw.githubusercontent.com/fgnt/mnist/master/train-images-idx3-ubyte.gz | \
 		$(GZIP) -dc > ./data/train-images-idx3-ubyte
-	-$(CURL) http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz | \
+	-$(CURL) https://raw.githubusercontent.com/fgnt/mnist/master/train-labels-idx1-ubyte.gz | \
 		$(GZIP) -dc > ./data/train-labels-idx1-ubyte
-	-$(CURL) http://yann.lecun.com/exdb/mnist/t10k-images-idx3-ubyte.gz | \
+	-$(CURL) https://raw.githubusercontent.com/fgnt/mnist/master/t10k-images-idx3-ubyte.gz | \
 		$(GZIP) -dc > ./data/t10k-images-idx3-ubyte
-	-$(CURL) http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz | \
+	-$(CURL) https://raw.githubusercontent.com/fgnt/mnist/master/t10k-labels-idx1-ubyte.gz | \
 		$(GZIP) -dc > ./data/t10k-labels-idx1-ubyte
-
+		
 test_bnn: ./bnn
 	./bnn
 
